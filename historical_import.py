@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
+import notifier
 
 load_dotenv()
 
@@ -256,6 +257,8 @@ def run_historical_import():
     conn.close()
     mail.logout()
     print(f"\n🎉 Historical import complete! Successfully extracted {total_added} jobs from the past year.")
+    if total_added > 0:
+        notifier.send_telegram_message(f"🎉 *Historical Import Complete!*\nSuccessfully extracted *{total_added}* job applications from the past year into your local tracker.")
 
 if __name__ == "__main__":
     run_historical_import()

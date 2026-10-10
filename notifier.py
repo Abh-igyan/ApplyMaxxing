@@ -1,8 +1,16 @@
 import sqlite3
 import requests
 import os
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
+
+# Ensure Windows terminal doesn't crash on UTF-8 strings
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 load_dotenv()
 
@@ -12,7 +20,7 @@ DB_FILE = 'jobs.db'
 
 def is_telegram_configured():
     invalid = ["your_bot_token_here", "your_telegram_bot_token", "", None]
-    return TELEGRAM_BOT_TOKEN not in invalid and TELEGRAM_CHAT_ID not in invalid
+    return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN not in invalid and TELEGRAM_CHAT_ID and TELEGRAM_CHAT_ID not in invalid)
 
 def send_telegram_message(text):
     if not is_telegram_configured():
@@ -26,11 +34,15 @@ def send_telegram_message(text):
     }
     try:
         response = requests.post(url, json=payload, timeout=10)
+        # Check if Telegram rejected markdown formatting, fallback to plain text if so
+        if response.status_code == 400 and "can't parse entities" in response.text:
+            payload.pop("parse_mode", None)
+            response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
-        print("📱 Telegram notification sent.")
+        print("[Telegram] Notification sent successfully.")
         return True
     except Exception as e:
-        print(f"Failed to send telegram notification: {e}")
+        print(f"[Telegram] Failed to send message: {e}")
         return False
 
 def notify_new_application(company, role, status, applied_date=""):
@@ -73,6 +85,19 @@ def notify_status_update(company, role, old_status, new_status):
         f"📊 *Status:* `{old_status}` ➔ *{new_status}*\n"
     )
     send_telegram_message(message)
+
+def notify_batch_import_summary(total_added, recent_jobs):
+    if total_added <= 0:
+        return
+        
+    lines = [f"📊 *Historical Job Import Complete!*", f"Successfully discovered and logged *{total_added}* applications from your inbox.\n"]
+    lines.append("*Recent additions:*")
+    for job in recent_jobs[:10]:
+        lines.append(f"• *{job['company']}* ({job['status']}) - {job['role']}")
+    if len(recent_jobs) > 10:
+        lines.append(f"\n_...and {len(recent_jobs) - 10} more! Check your local dashboard._")
+        
+    send_telegram_message("\n".join(lines))
 
 def check_deadlines():
     print("Checking for upcoming deadlines...")

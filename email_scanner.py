@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
+import notifier
 
 load_dotenv()
 
@@ -207,6 +208,7 @@ def scan_emails_for_updates():
                         conn.commit()
                         existing_jobs[comp_key] = new_status
                         new_jobs_added += 1
+                        notifier.notify_new_application(company, role, new_status, applied_date)
                         
                     else:
                         current_status = existing_jobs[comp_key]
@@ -216,6 +218,7 @@ def scan_emails_for_updates():
                             conn.commit()
                             existing_jobs[comp_key] = new_status
                             updates_made += 1
+                            notifier.notify_status_update(company, role, current_status, new_status)
                 elif llm_result:
                     print(f"   -> Ignored (LLM decided it's not a job application)")
 

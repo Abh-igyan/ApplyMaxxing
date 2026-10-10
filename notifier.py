@@ -1,23 +1,22 @@
 import sqlite3
 import requests
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# SETUP TELEGRAM NOTIFICATIONS
-# 1. Message @BotFather on Telegram, send /newbot, and get your BOT_TOKEN.
-# 2. Message your new bot, then go to https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates to get your CHAT_ID.
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "your_bot_token_here")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "your_chat_id_here")
-
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 DB_FILE = 'jobs.db'
 
+def is_telegram_configured():
+    invalid = ["your_bot_token_here", "your_telegram_bot_token", "", None]
+    return TELEGRAM_BOT_TOKEN not in invalid and TELEGRAM_CHAT_ID not in invalid
+
 def send_telegram_message(text):
-    if TELEGRAM_BOT_TOKEN == "your_bot_token_here":
-        print("Please set up your Telegram Bot Token in notifier.py!")
-        return
+    if not is_telegram_configured():
+        return False
         
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -26,18 +25,59 @@ def send_telegram_message(text):
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
-        print("Notification sent successfully.")
+        print("📱 Telegram notification sent.")
+        return True
     except Exception as e:
-        print(f"Failed to send telegram message: {e}")
+        print(f"Failed to send telegram notification: {e}")
+        return False
+
+def notify_new_application(company, role, status, applied_date=""):
+    emoji = "🎯"
+    if "Offer" in status:
+        emoji = "🏆"
+    elif "Interview" in status:
+        emoji = "💼"
+    elif "OA" in status or "Assessment" in status:
+        emoji = "⚡"
+    elif "Rejected" in status:
+        emoji = "🛑"
+
+    message = (
+        f"{emoji} *Job Tracker Alert: New Application*\n\n"
+        f"🏢 *Company:* {company}\n"
+        f"💼 *Role:* {role}\n"
+        f"📌 *Status:* `{status}`\n"
+    )
+    if applied_date:
+        message += f"📅 *Date:* {applied_date}\n"
+    
+    send_telegram_message(message)
+
+def notify_status_update(company, role, old_status, new_status):
+    emoji = "🔄"
+    if "Offer" in new_status:
+        emoji = "🎉🏆"
+    elif "Interview" in new_status:
+        emoji = "🚀💼"
+    elif "OA" in new_status or "Assessment" in new_status:
+        emoji = "⚡"
+    elif "Rejected" in new_status:
+        emoji = "📉"
+
+    message = (
+        f"{emoji} *Job Application Status Update!*\n\n"
+        f"🏢 *Company:* {company}\n"
+        f"💼 *Role:* {role}\n"
+        f"📊 *Status:* `{old_status}` ➔ *{new_status}*\n"
+    )
+    send_telegram_message(message)
 
 def check_deadlines():
     print("Checking for upcoming deadlines...")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    
-    # Get jobs with status 'Saved' or similar that haven't been applied to yet
     c.execute("SELECT company, role, deadline, job_link FROM jobs WHERE status LIKE '%Saved%'")
     saved_jobs = c.fetchall()
     conn.close()
@@ -66,5 +106,10 @@ def check_deadlines():
         print("No urgent deadlines in the next 3 days.")
 
 if __name__ == "__main__":
-    check_deadlines()
-
+    if is_telegram_configured():
+        print("Testing Telegram connection...")
+        success = send_telegram_message("🚀 *ApplyMaxxing* connected! You will now receive instant application & status updates here.")
+        if success:
+            print("✅ Test message delivered!")
+    else:
+        print("⚠️ Telegram is not configured in .env yet.")

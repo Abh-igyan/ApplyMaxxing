@@ -46,3 +46,4 @@ streamlit run app.py
 
 ## Why ApplyMaxxing?
 Standard sequential LLM email parsers crash or exhaust free-tier API quotas instantly. ApplyMaxxing uses a smart local filter combined with batch-prompting to give you a full application knowledge graph with minimal token usage and API calls. Stop getting ghosted in the dark—track your aura.
+
